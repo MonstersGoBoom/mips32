@@ -13,4 +13,7 @@ there are nicer ways to write a disassembler but this is intended to be used as 
 
 ```m32_disasm intro.pxe output.s```
 
+# todo
+Allocate buffer for file vs hard coded.
 
+Emulator!
