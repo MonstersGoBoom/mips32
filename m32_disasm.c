@@ -80,7 +80,6 @@ char *regnames[]={
 //	basically mips_instructionmame
 //	R type opcodes
 
-void mips_nop(MIPSI *m) { 	fprintf(outfile,"NOP\n"); }
 void mips_add(MIPSI *m)
 {
 	fprintf(outfile,"ADD %s,%s,%s\n",regnames[m->R.rd],regnames[m->R.rs],regnames[m->R.rt]);
