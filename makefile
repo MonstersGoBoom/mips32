@@ -8,7 +8,7 @@ CC=gcc
 #.c.o: 
 #	$(CC) $(CFLAGS) -c -o $@ $<
 
-all: m32_disasm.exe
+all: m32_disasm.exe 
 
 m32_disasm.exe: $(M32_OBJS)
 	$(CC) $(CFLAGS) -s -o $@ $(M32_OBJS)
