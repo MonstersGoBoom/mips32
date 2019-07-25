@@ -13,6 +13,8 @@ uint32_t PC = 0;
 uint32_t start_address = 0;
 
 //	return correct signed hex string
+//	for example 0xa00 or -0xa00 this is how assembers accept the values 
+
 char hexstring[256];	
 char *shex(uint16_t value)
 {
@@ -24,6 +26,7 @@ bool isneg=value&0x8000;
 	return hexstring;
 }
 
+//	opcode type and structure
 typedef union 
 {
 	//opcode	rs			rt			rd			shift (shamt)	funct
@@ -37,7 +40,6 @@ typedef union
 		uint32_t rs:5;
 		uint32_t op:6;
 	} R;
-
 
 	//opcode	rs	rt	IMM
 	//6 bits	5 bits	5 bits	16 bits
@@ -59,6 +61,7 @@ typedef union
 
 } MIPSI;
 
+//	names of the registers as strings 
 char *regnames[]={
 		"$zero",
 		"$at",
@@ -73,11 +76,13 @@ char *regnames[]={
 		"$fp",
 		"$ra"};
 
-void mips_nop(MIPSI *m) { 	fprintf(outfile,"NOP\n"); }
 
+//	basically mips_instructionmame
+//	R type opcodes
+
+void mips_nop(MIPSI *m) { 	fprintf(outfile,"NOP\n"); }
 void mips_add(MIPSI *m)
 {
-//	fprintf(outfile,"add\t");
 	fprintf(outfile,"ADD %s,%s,%s\n",regnames[m->R.rd],regnames[m->R.rs],regnames[m->R.rt]);
 }
 
@@ -194,9 +199,9 @@ void mips_syscall(MIPSI *m)
 void mips_break(MIPSI *m)
 {
 	fprintf(outfile,"BREAK 0x%x\n",m->I.rt<<10);
-	uint32_t *v = (uint32_t*)m;
-//	fprintf(outfile,"undefined R instruction %08x\n",v[0]);
 }
+
+//	jump table for R type instructions
 
 void (*mips_cpu_R_instructions[])() = 
 {
@@ -207,6 +212,7 @@ void (*mips_cpu_R_instructions[])() =
 	NULL,			NULL,			NULL,			NULL,				NULL,			NULL,			NULL,			NULL,			NULL,				NULL,				NULL,			NULL,				NULL,					NULL,				NULL,	NULL,	//	30
 };
 
+//	function for R types 
 void cpu_R_instructions(MIPSI *mi)
 {
 	if (mips_cpu_R_instructions[mi->R.funct]!=NULL)
@@ -220,6 +226,8 @@ void cpu_R_instructions(MIPSI *mi)
 	}
 }
 
+//	J types
+
 void mips_ja(MIPSI *m)
 {
 	fprintf(outfile,"J 0x%X\n",start_address|(m->J.addr<<2));
@@ -229,6 +237,8 @@ void mips_jal(MIPSI *m)
 {
 	fprintf(outfile,"JAL 0x%X\n",start_address|(m->J.addr<<2));
 }
+
+//	I types
 
 void mips_beq(MIPSI *m)
 {
@@ -307,7 +317,6 @@ void mips_lb(MIPSI *m)
 	fprintf(outfile,"LB %s,%s(%s)\n",regnames[m->I.rt],shex(m->I.imm),regnames[m->I.rs]);
 }
 
-
 void mips_lw(MIPSI *m)
 {
 	fprintf(outfile,"LW %s,%s(%s)\n",regnames[m->I.rt],shex(m->I.imm),regnames[m->I.rs]);
@@ -348,6 +357,9 @@ void mips_sw(MIPSI *m)
 	fprintf(outfile,"SW %s,%s(%s)\n",regnames[m->I.rt],shex(m->I.imm),regnames[m->I.rs]);
 }
 
+//	jumptable for base type instructions
+//	op zero calls R type function jumptable
+
 void (*mips_cpu_base_instructions[])() = 
 {
 // 0									1					2				3					4					5					6					7					8						9						A					B						C						D					E			F
@@ -357,6 +369,7 @@ void (*mips_cpu_base_instructions[])() =
 	NULL,								NULL,			NULL,		NULL,			NULL,			NULL,			NULL,			NULL,			NULL,				NULL,				NULL,			NULL,				NULL,				NULL,			NULL,	NULL,	//	30
 };
 
+//	dumn commandline stuff
 void main(int argc,char *argv[])
 {
 	int len = 0;
@@ -371,9 +384,10 @@ void main(int argc,char *argv[])
 		printf("\t\t\t[outfile] optional text file to output\n");
 		exit(0);
 	}
-
+	//	default out is stdout
 	outfile = stdout;
 
+	//	handle args
 	int filename=0;
 	for (int q=1;q<argc;q++)
 	{
@@ -392,6 +406,8 @@ void main(int argc,char *argv[])
 		if (stricmp(argv[q],"-b")==0) rawbin=true;
 	}
 
+	// some checking
+
 	if (filenames[0]==NULL)
 	{
 		fprintf(outfile,"no file to load\n");
@@ -404,7 +420,10 @@ void main(int argc,char *argv[])
 	}
 
 
+	// read the file
 	FILE *fp=fopen(filenames[0],"rb");
+
+	//	if it's an EXE load the header and get start address
 	if (rawbin==false)
 	{
 		fseek(fp,0x18,SEEK_SET);
@@ -413,18 +432,18 @@ void main(int argc,char *argv[])
 	}		
 	else 
 	{
+	//	raw is started at 0 
 		start_address = 0;
 	}
 	len = fread(buffer,1,65536*4,fp);
 	fclose(fp);
 
+	//	start the decode
 	uint32_t *ptr = (uint32_t*)&buffer[0];
-
 	for (int q=0;q<(len>>2);q++)
 	{
 		MIPSI *mi = (MIPSI*)ptr;
 		PC = start_address+((uint32_t)q*4);
-
 		if (*ptr==0)
 			fprintf(outfile,"NOP\n");
 		else			
@@ -435,12 +454,14 @@ void main(int argc,char *argv[])
 			}
 			else 
 			{
+				//	this handles unsupported cases by spitting out a dword 
 				fprintf(outfile,"dw 0x%08x\n",*ptr);
 			}
 		}			
 		ptr++;		
 	}
 
+	//	close up shop
 	if (outfile!=stdout)
 		fclose(outfile);
 }
