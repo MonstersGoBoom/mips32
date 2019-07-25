@@ -6,3 +6,11 @@ included intro.pxe ( as PSX intro from Hitmen )
 
 there are nicer ways to write a disassembler but this is intended to be used as an emulator also which is why the code is structured in a more verbose manner. 
 
+# building 
+```make``` 
+
+# running
+
+```m32_disasm intro.pxe output.s```
+
+
