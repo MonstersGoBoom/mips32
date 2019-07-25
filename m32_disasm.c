@@ -13,7 +13,7 @@ uint32_t PC = 0;
 uint32_t start_address = 0;
 
 //	return correct signed hex string
-//	for example 0xa00 or -0xa00 this is how assembers accept the values 
+//	for example 0xa00 or -0xa00 this is how assemblers accept the values 
 
 char hexstring[256];	
 char *shex(uint16_t value)
@@ -29,7 +29,7 @@ bool isneg=value&0x8000;
 //	opcode type and structure
 typedef union 
 {
-	//opcode	rs			rt			rd			shift (shamt)	funct
+	//opcode	rs			rt			rd			shift 	funct
 	//6 bits	5 bits	5 bits	5 bits	5 bits	6 bits
 	//	R type instruction
 	struct {
