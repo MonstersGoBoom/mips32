@@ -10,7 +10,7 @@
 #include "mips32.h"
 
 #define DISASM
-//#define EMULATOR
+#define EMULATOR
 
 
 static void cleanup();
@@ -63,16 +63,47 @@ void write8(uint32_t address,uint8_t data)
 	mcpu_ram[address&0xffff]=data;
 }
 
+uint16_t read16(uint32_t address)
+{
+uint32_t vad = address&0xffff;
+
+	uint16_t val = mcpu.read8(vad+1) << 8 |
+								 mcpu.read8(vad);
+	printf("read %08x from  %x\n",val,address);
+	return val;
+}
+
+uint32_t read32(uint32_t address)
+{
+uint32_t vad = address&0xffff;
+	uint32_t val = 	mcpu.read8(vad+3) << 24|
+									mcpu.read8(vad+2) << 16 |
+									mcpu.read8(vad+1) << 8 |
+									mcpu.read8(vad);
+	printf("read %08x from  %x\n",val,address);
+	return val;
+}
+
+void write16(uint32_t address,uint16_t data)
+{
+uint32_t vad = address&0xffff;	
+
+	printf("write %08x to ram %x\n",data,address);
+
+	mcpu.write8(vad,data&0xff);
+	mcpu.write8(vad+1,(data>>8)&0xff);
+}
+
 void write32(uint32_t address,uint32_t data)
 {
 uint32_t vad = address&0xffff;	
 
 	printf("write %08x to ram %x\n",data,address);
 
-	mcpu_ram[vad]=data>>24;
-	mcpu_ram[vad+1]=data>>16;
-	mcpu_ram[vad+2]=data>>8;
-	mcpu_ram[vad+3]=data;
+	mcpu.write8(vad,data&0xff);
+	mcpu.write8(vad+1,(data>>8)&0xff);
+	mcpu.write8(vad+2,(data>>16)&0xff);
+	mcpu.write8(vad+3,(data>>24)&0xff);
 }
 
 void mips_reset()
@@ -83,7 +114,6 @@ void mips_reset()
 	mcpu.PC = 0;
 	mcpu.read8 = read8;
 	mcpu.write8 = write8;
-	mcpu.write32 = write32;
 }
 
 void mips_dumpram()
@@ -98,7 +128,7 @@ void mips_display()
 	fprintf(outfile,"PC:%08X\n",mcpu.PC);
 	for (int q=0;q<32;q++)
 	{
-		fprintf(outfile,"%s=%08X\t",regnames[q],mcpu.Registers[q]);
+		fprintf(outfile,"%s=%016X\t",regnames[q],mcpu.Registers[q]);
 		if ((q&7)==7)
 			fprintf(outfile,"\n");
 	}
@@ -159,17 +189,32 @@ typedef union
 
 void mips_add(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"ADD %s,%s,%s\n",regnames[m->R.rd],regnames[m->R.rs],regnames[m->R.rt]);
-}
+#endif
+#ifdef EMULATOR
+	mcpu.Registers[m->R.rd] = (int32_t)mcpu.Registers[m->R.rs] + (int32_t)mcpu.Registers[m->R.rt];
+#endif
 
+}
 void mips_addu(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"ADDU %s,%s,%s\n",regnames[m->R.rd],regnames[m->R.rs],regnames[m->R.rt]);
+#endif
+#ifdef EMULATOR
+	mcpu.Registers[m->R.rd] = (uint32_t)mcpu.Registers[m->R.rs] + (uint32_t)mcpu.Registers[m->R.rt];
+#endif
 }
 
 void mips_sub(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"SUB %s,%s,%s\n",regnames[m->R.rd],regnames[m->R.rs],regnames[m->R.rt]);
+#endif
+#ifdef EMULATOR
+	mcpu.Registers[m->R.rd] = (int32_t)mcpu.Registers[m->R.rs] - (int32_t)mcpu.Registers[m->R.rt];
+#endif	
 }
 
 void mips_subu(MIPSI *m)
@@ -178,98 +223,194 @@ void mips_subu(MIPSI *m)
 	fprintf(outfile,"SUBU %s,%s,%s\n",regnames[m->R.rd],regnames[m->R.rs],regnames[m->R.rt]);
 #endif	
 #ifdef EMULATOR
-	mcpu.Registers[m->R.rd] = mcpu.Registers[m->R.rs] - mcpu.Registers[m->R.rt];
+	mcpu.Registers[m->R.rd] = (uint32_t)mcpu.Registers[m->R.rs] - (uint32_t)mcpu.Registers[m->R.rt];
 #endif	
 }
 
 void mips_and(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"AND %s,%s,%s\n",regnames[m->R.rd],regnames[m->R.rs],regnames[m->R.rt]);
+#endif
+#ifdef EMULATOR
+	mcpu.Registers[m->R.rd] = (int32_t)mcpu.Registers[m->R.rs] & (int32_t)mcpu.Registers[m->R.rt];
+#endif
 }
 
 void mips_div(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"DIV %s,%s\n",regnames[m->R.rs],regnames[m->R.rt]);
+#endif
+#ifdef EMULATOR
+	mcpu.lo = (int32_t)mcpu.Registers[m->R.rs] / (int32_t)mcpu.Registers[m->R.rt];
+	mcpu.hi = (int32_t)mcpu.Registers[m->R.rs] % (int32_t)mcpu.Registers[m->R.rt];
+#endif
 
 }
 void mips_divu(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"DIVU %s,%s\n",regnames[m->R.rs],regnames[m->R.rt]);
+#endif
+#ifdef EMULATOR
+	mcpu.lo = (uint32_t)mcpu.Registers[m->R.rs] / (uint32_t)mcpu.Registers[m->R.rt];
+	mcpu.hi = (uint32_t)mcpu.Registers[m->R.rs] % (uint32_t)mcpu.Registers[m->R.rt];
+#endif
 }
 
 void mips_jr(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"JR %s\n",regnames[m->R.rs]);
+#endif
+#ifdef EMULATOR
+	fprintf(outfile,"TODO %d\n",__LINE__);
+#endif
 }
 
 void mips_mfhi(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"MFHI %s\n",regnames[m->R.rd]);
+#endif
+#ifdef EMULATOR
+	fprintf(outfile,"TODO %d\n",__LINE__);
+#endif
 }
 
 void mips_mthi(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"MTHI %s\n",regnames[m->R.rs]);
+#endif
+#ifdef EMULATOR
+	fprintf(outfile,"TODO %d\n",__LINE__);
+#endif
 }
 
 void mips_mflo(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"MFLO %s\n",regnames[m->R.rd]);
+#endif
+#ifdef EMULATOR
+	fprintf(outfile,"TODO %d\n",__LINE__);
+#endif
 }
 
 void mips_mtlo(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"MTLO %s\n",regnames[m->R.rd]);
+#endif
+#ifdef EMULATOR
+	fprintf(outfile,"TODO %d\n",__LINE__);
+#endif
 }
 
 void mips_mult(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"MULT %s,%s\n",regnames[m->R.rs],regnames[m->R.rt]);
+#endif
+#ifdef EMULATOR
+	uint64_t result = (int32_t)mcpu.Registers[m->R.rs] * (int32_t)mcpu.Registers[m->R.rt];
+	mcpu.lo = (int32_t)result;
+	mcpu.hi = (int32_t)(result>>32);
+#endif
 }
 
 void mips_multu(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"MULTU %s,%s\n",regnames[m->R.rs],regnames[m->R.rt]);
+#endif
+#ifdef EMULATOR
+	uint64_t result = (uint32_t)mcpu.Registers[m->R.rs] * (uint32_t)mcpu.Registers[m->R.rt];
+	mcpu.lo = (uint32_t)result;
+	mcpu.hi = (uint32_t)(result>>32);
+#endif
 }
 
 void mips_nor(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"NOR %s,%s,%s\n",regnames[m->R.rt],regnames[m->R.rs],regnames[m->R.rd]);
+#endif
+#ifdef EMULATOR
+	fprintf(outfile,"TODO %d\n",__LINE__);
+#endif
 }
 
 void mips_xor(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"XOR %s,%s,%s\n",regnames[m->R.rd],regnames[m->R.rs],regnames[m->R.rt]);
+#endif
+#ifdef EMULATOR
+	fprintf(outfile,"TODO %d\n",__LINE__);
+#endif
 }
 
 void mips_or(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"OR %s,%s,%s\n",regnames[m->R.rd],regnames[m->R.rs],regnames[m->R.rt]);
+#endif
+#ifdef EMULATOR
+	fprintf(outfile,"TODO %d\n",__LINE__);
+#endif
 }
 
 void mips_slt(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"SLT %s,%s,%x\n",regnames[m->R.rd],regnames[m->R.rt],m->R.shift);
+#endif
+#ifdef EMULATOR
+	fprintf(outfile,"TODO %d\n",__LINE__);
+#endif
 }
 
 void mips_sltu(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"SLTU %s,%s,%s\n",regnames[m->R.rd],regnames[m->R.rs],regnames[m->R.rt]);
+#endif
+#ifdef EMULATOR
+	fprintf(outfile,"TODO %d\n",__LINE__);
+#endif
 }
 
 void mips_sll(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"SLL %s,%s,0x%04X\n",regnames[m->R.rd],regnames[m->R.rt],m->R.shift);
+#endif
+#ifdef EMULATOR
+	fprintf(outfile,"TODO %d\n",__LINE__);
+#endif
 }
 
 void mips_srl(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"SRL %s,%s,0x%04X\n",regnames[m->R.rd],regnames[m->R.rt],m->R.shift);
+#endif
+#ifdef EMULATOR
+	fprintf(outfile,"TODO %d\n",__LINE__);
+#endif
 }
 
 void mips_sra(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"SRA %s,%s,%d\n",regnames[m->R.rd],regnames[m->R.rt],m->R.shift);
+#endif
+#ifdef EMULATOR
+	fprintf(outfile,"TODO %d\n",__LINE__);
+#endif
 }
 
 
@@ -362,7 +503,12 @@ void mips_syscall(MIPSI *m)
 
 void mips_break(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"BREAK 0x%x\n",m->I.rt<<10);
+#endif
+#ifdef EMULATOR
+	exit(0);
+#endif
 }
 
 //	jump table for R type instructions
@@ -386,7 +532,9 @@ void cpu_R_instructions(MIPSI *mi)
 	else 
 	{
 		uint32_t *v = (uint32_t*)mi;
+#ifdef DISASM	
 		fprintf(outfile,"dw 0x%08x\n",*v);
+#endif
 	}
 }
 
@@ -394,12 +542,22 @@ void cpu_R_instructions(MIPSI *mi)
 
 void mips_ja(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"J 0x%X\n",mcpu.base_address|(m->J.addr<<2));
+#endif
+#ifdef EMULATOR
+	fprintf(outfile,"TODO %d\n",__LINE__);
+#endif
 }
 
 void mips_jal(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"JAL 0x%X\n",mcpu.base_address|(m->J.addr<<2));
+#endif
+#ifdef EMULATOR
+	fprintf(outfile,"TODO %d\n",__LINE__);
+#endif
 }
 
 //	I types
@@ -409,7 +567,7 @@ void mips_beq(MIPSI *m)
 int16_t v=(m->I.imm)*4;	
 #ifdef DISASM	
 	fprintf(outfile,"BEQ\t");
-	fprintf(outfile,"%s=%d,%s=%d,%s",regnames[m->I.rs],mcpu.Registers[m->I.rs],regnames[m->I.rt],mcpu.Registers[m->I.rt],shex(v));
+	fprintf(outfile,"%s=%d,%s=%d,%s\n",regnames[m->I.rs],mcpu.Registers[m->I.rs],regnames[m->I.rt],mcpu.Registers[m->I.rt],shex(v));
 #endif	
 #ifdef EMULATOR
 	if (mcpu.Registers[m->I.rs]==mcpu.Registers[m->I.rt])
@@ -417,113 +575,218 @@ int16_t v=(m->I.imm)*4;
 		mcpu.PC = mcpu.PC+v;
 	}
 #endif	
-#ifdef DISASM	
-	fprintf(outfile,"\n");
-#endif	
 }
 
 void mips_bne(MIPSI *m)
 {
 int16_t v=(m->I.imm)*4;	
+#ifdef DISASM	
 	fprintf(outfile,"BNE\t");
 	fprintf(outfile,"%s,%s,0x%x\n",regnames[m->I.rs],regnames[m->I.rt],mcpu.PC+4+v);
+#endif	
+
+#ifdef EMULATOR
+	if (mcpu.Registers[m->I.rs]!=mcpu.Registers[m->I.rt])
+	{
+		mcpu.PC = mcpu.PC+v;
+	}
+#endif	
+
 }
 
 void mips_blez(MIPSI *m)
 {
 int16_t v=(m->I.imm)*4;	
+#ifdef DISASM	
 	fprintf(outfile,"BLEZ\t");
 	fprintf(outfile,"%s,%s,0x%x\n",regnames[m->I.rs],regnames[m->I.rt],mcpu.PC+4+v);
+#endif
+#ifdef EMULATOR
+	if (mcpu.Registers[m->I.rs]<=0)
+	{
+		mcpu.PC = mcpu.PC+v;
+	}
+#endif
+}
+
+void mips_bgez(MIPSI *m)
+{
+int16_t v=(m->I.imm)*4;	
+#ifdef DISASM	
+	fprintf(outfile,"BGTZ\t");
+	fprintf(outfile,"%s,%s,0x%x\n",regnames[m->I.rs],regnames[m->I.rt],mcpu.PC+4+v);
+#endif
+#ifdef EMULATOR
+	if (mcpu.Registers[m->I.rs]>=0)
+	{
+		mcpu.PC = mcpu.PC+v;
+	}
+#endif
 }
 
 void mips_bgtz(MIPSI *m)
 {
 int16_t v=(m->I.imm)*4;	
+#ifdef DISASM	
 	fprintf(outfile,"BGTZ\t");
 	fprintf(outfile,"%s,%s,0x%x\n",regnames[m->I.rs],regnames[m->I.rt],mcpu.PC+4+v);
+#endif
+#ifdef EMULATOR
+	if (mcpu.Registers[m->I.rs]>0)
+	{
+		mcpu.PC = mcpu.PC+v;
+	}
+#endif
 }
 
 void mips_bltz(MIPSI *m)
 {
 int16_t v=(m->I.imm)*4;	
+#ifdef DISASM	
 	fprintf(outfile,"BLTZ\t");
 	fprintf(outfile,"%s,0x%x\n",regnames[m->I.rs],mcpu.PC+4+v);
+#endif
+#ifdef EMULATOR
+	if (mcpu.Registers[m->I.rs]<0)
+	{
+		mcpu.PC = mcpu.PC+v;
+	}
+#endif
+
 }
 
+//	add immediate
 void mips_addi(MIPSI *m)
 {
 #ifdef DISASM	
 	fprintf(outfile,"ADDI\t");
 	fprintf(outfile,"%s,%s,%s\n",regnames[m->I.rt],regnames[m->I.rs],shex(m->I.imm));
 #endif	
+#ifdef EMULATOR
 	mcpu.Registers[m->I.rt] = mcpu.Registers[m->I.rs] + (int16_t)m->I.imm;
-
+#endif	
 }
 
+//	add unsigned immediate
 void mips_addiu(MIPSI *m)
 {
 #ifdef DISASM	
 	fprintf(outfile,"ADDIU\t");
 	fprintf(outfile,"%s,%s,0x%04X\n",regnames[m->I.rt],regnames[m->I.rs],m->I.imm);
 #endif	
-	mcpu.Registers[m->I.rt] = mcpu.Registers[m->I.rs] + (int16_t)m->I.imm;
+#ifdef EMULATOR
+	mcpu.Registers[m->I.rt] = (uint32_t)mcpu.Registers[m->I.rs] + (uint16_t)m->I.imm;
+#endif
 }
 
 void mips_slti(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"SLTI %s,%s,0x%x\n",regnames[m->I.rt],regnames[m->I.rs],m->I.imm);
+#endif
+#ifdef EMULATOR
+	mcpu.Registers[m->I.rt] = (int32_t)mcpu.Registers[m->I.rs] < (int16_t)m->I.imm;
+#endif
 }
 
 void mips_sltiu(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"SLTIU %s,%s,0x%x\n",regnames[m->I.rt],regnames[m->I.rs],m->I.imm);
+#endif
+#ifdef EMULATOR
+	mcpu.Registers[m->I.rt] = (uint32_t)mcpu.Registers[m->I.rs] < (uint16_t)m->I.imm;
+#endif
 }
 
 void mips_andi(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"ANDI %s,%s,0x%04X\n",regnames[m->I.rt],regnames[m->I.rs],m->I.imm);
+#endif
+#ifdef EMULATOR
+	mcpu.Registers[m->I.rt] = mcpu.Registers[m->I.rs] & (int16_t)m->I.imm;
+#endif
 }
 
 void mips_ori(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"ORI %s,%s,0x%x\n",regnames[m->I.rt],regnames[m->I.rs],m->I.imm);
+#endif
+#ifdef EMULATOR
+	mcpu.Registers[m->I.rt] = mcpu.Registers[m->I.rs] | m->I.imm;
+#endif
 }
 
-void mips_mfc0(MIPSI *m)
-{
-	fprintf(outfile,"MFCO %s,%s\n",regnames[m->R.rt],regnames[m->R.rd]);
-}
 
 void mips_lb(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"LB %s,%s(%s)\n",regnames[m->I.rt],shex(m->I.imm),regnames[m->I.rs]);
-}
-
-void mips_lw(MIPSI *m)
-{
-	fprintf(outfile,"LW %s,%s(%s)\n",regnames[m->I.rt],shex(m->I.imm),regnames[m->I.rs]);
+#endif
+#ifdef EMULATOR
+	uint32_t ra = mcpu.Registers[m->I.rs] + mcpu.Registers[m->I.imm];
+	mcpu.Registers[m->I.rt] = read8(ra);
+#endif
 }
 
 void mips_lh(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"LH %s,%s(%s)\n",regnames[m->I.rt],shex(m->I.imm),regnames[m->I.rs]);
+#endif
+#ifdef EMULATOR
+	uint32_t ra = mcpu.Registers[m->I.rs] + mcpu.Registers[m->I.imm];
+	mcpu.Registers[m->I.rt] = read16(ra);
+#endif
+}
+
+void mips_lw(MIPSI *m)
+{
+#ifdef DISASM	
+	fprintf(outfile,"LW %s,%s(%s)\n",regnames[m->I.rt],shex(m->I.imm),regnames[m->I.rs]);
+#endif
+#ifdef EMULATOR
+	uint32_t ra = mcpu.Registers[m->I.rs] + mcpu.Registers[m->I.imm];
+	mcpu.Registers[m->I.rt] = read32(ra);
+#endif
 }
 
 void mips_lbu(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"LBU %s,0x%04x(%s)\n",regnames[m->I.rt],m->I.imm,regnames[m->I.rs]);
+#endif
+#ifdef EMULATOR
+	uint32_t ra = mcpu.Registers[m->I.rs] + mcpu.Registers[m->I.imm];
+	mcpu.Registers[m->I.rt] = read8(ra);
+#endif
 }
 
 void mips_lhu(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"LHU %s,0x%04x(%s)\n",regnames[m->I.rt],m->I.imm,regnames[m->I.rs]);
+#endif
+#ifdef EMULATOR
+	uint32_t ra = mcpu.Registers[m->I.rs] + mcpu.Registers[m->I.imm];
+	mcpu.Registers[m->I.rt] = read16(ra);
+#endif
 }
 
 void mips_lui(MIPSI *m)
 {
+#ifdef DISASM	
 	fprintf(outfile,"LUI %s,0x%x\n",regnames[m->I.rt],m->I.imm);
+#endif
+#ifdef EMULATOR
+	uint32_t ra = mcpu.Registers[m->I.rs] + mcpu.Registers[m->I.imm];
+	mcpu.Registers[m->I.rt] = read16(ra)<<16;
+#endif
 }
 
+//	store byte
 void mips_sb(MIPSI *m)
 {
 uint32_t address;	
@@ -531,18 +794,29 @@ uint8_t value;
 #ifdef DISASM	
 	fprintf(outfile,"SB %s,0x%04x(%s)\n",regnames[m->I.rt],m->I.imm,regnames[m->I.rs]);
 #endif
+#ifdef EMULATOR
 	value = mcpu.Registers[m->I.rt];
 	address = mcpu.Registers[m->I.rs] + (int16_t)m->I.imm;
-	mcpu.write8(address,value);
-	mips_dumpram();
-	//mips_display(&mcpu);
+	write8(address,value);
+#endif
 }
 
+//	store half word ( 16 bits )
 void mips_sh(MIPSI *m)
 {
+uint32_t address;	
+uint16_t value;
+#ifdef DISASM	
 	fprintf(outfile,"SH %s,%s,0x%04x\n",regnames[m->I.rt],regnames[m->I.rs],m->I.imm);
+#endif
+#ifdef EMULATOR
+	value = mcpu.Registers[m->I.rt];
+	address = mcpu.Registers[m->I.rs] + (int16_t)m->I.imm;
+	write16(address,value);
+#endif
 }
 
+//	store word ( 32 bits )
 void mips_sw(MIPSI *m)
 {
 uint32_t address;	
@@ -553,12 +827,7 @@ uint32_t value;
 #ifdef EMULATOR
 	value = mcpu.Registers[m->I.rt];
 	address = mcpu.Registers[m->I.rs] + (int16_t)m->I.imm;
-	mcpu.write32(address,value);
-	mips_display(&mcpu);
-	mips_dumpram();
-	int a=getch();
-	if (a==0x1b)
-		exit(0);
+	write32(address,value);
 #endif		
 }
 
@@ -569,7 +838,7 @@ void (*mips_cpu_base_instructions[])() =
 {
 // 0									1					2				3					4					5					6					7					8						9						A					B						C						D					E			F
 	cpu_R_instructions,	mips_bltz,mips_ja,mips_jal,	mips_beq,	mips_bne,	mips_blez,mips_bgtz,mips_addi,	mips_addiu,	mips_slti,mips_sltiu,	mips_andi,	mips_ori,	NULL,	mips_lui,	//	00
-	mips_mfc0,					NULL,			NULL,		NULL,			NULL,			NULL,			NULL,			NULL,			NULL,				NULL,				NULL,			NULL,				NULL,				NULL,			NULL,	NULL,	//	10
+	NULL,								NULL,			NULL,		NULL,			NULL,			NULL,			NULL,			NULL,			NULL,				NULL,				NULL,			NULL,				NULL,				NULL,			NULL,	NULL,	//	10
 	mips_lb,						mips_lh,	NULL,		mips_lw,	mips_lbu,	mips_lhu,	NULL,			NULL,			mips_sb,		mips_sh,		NULL,			mips_sw,		NULL,				NULL,			NULL,	NULL,	//	20
 	NULL,								NULL,			NULL,		NULL,			NULL,			NULL,			NULL,			NULL,			NULL,				NULL,				NULL,			NULL,				NULL,				NULL,			NULL,	NULL,	//	30
 };
@@ -667,7 +936,7 @@ void main(int argc,char *argv[])
 
 
 	mips_reset();
-	mips_display();
+	memcpy(mcpu_ram,buffer,mcpu.length);
 
 	//	start the decode
 	mcpu.PC = mcpu.base_address;
@@ -679,9 +948,6 @@ void main(int argc,char *argv[])
 	{
 		uint32_t *ptr = (uint32_t*)&buffer[mcpu.PC-mcpu.base_address];
 		MIPSI *mi = (MIPSI*)ptr;
-#if 0		
-		fprintf(outfile,"\nPC %08x:%x ",mcpu.PC,mi->I.op);
-#endif		
 		if (*ptr==0)
 			fprintf(outfile,"NOP\n");
 		else			
@@ -689,6 +955,7 @@ void main(int argc,char *argv[])
 			if (mips_cpu_base_instructions[mi->I.op]!=NULL)
 			{
 				(*mips_cpu_base_instructions[mi->I.op])(mi);
+				mips_display(&mcpu);
 			}
 			else 
 			{

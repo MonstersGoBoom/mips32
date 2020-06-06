@@ -1,4 +1,5 @@
-.mips32
+.psx
+.create "age.bin", 0x80010000
 ; NOTE: You will have to hit cancel when Chrome complains that you are stuck in an infinite loop.
 ; Registers in use:
 ;   $t0: location of 'What year were you born?' on stack
@@ -246,3 +247,5 @@ syscall
 beq $a0, $zero, ASK_QUESTION
 
 END:
+
+.close

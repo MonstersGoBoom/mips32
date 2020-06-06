@@ -1,4 +1,5 @@
-.mips32
+.psx
+.create "helloworld.bin", 0x80010000
 ; Store 'Hello world!' at the top of the stack
 ADDI $sp, $sp, -13
 ADDI $t0, $zero, 72 ; H
@@ -31,3 +32,5 @@ SB $t0, 12($sp)
 ADDI $v0, $zero, 4 ; 4 is for print string
 ADDI $a0, $sp, 0
 syscall 			; print to the log
+
+.close
